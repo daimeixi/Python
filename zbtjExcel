@@ -1,0 +1,740 @@
+import datetime
+from random import choice
+import time
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl import Workbook
+from openpyxl.styles import Color,Font,Alignment,PatternFill,Border,Side,Protection
+
+#
+# ************************************使用说明***************************************
+# 下载源文件后，在复制整合之前，需要在源文件中做取消隐藏的操作（注意核对单元格行数、记录数）
+# 整合文件中：sheet1保存政务服务事项源数据、sheet2中保存网上实现率源数据、sheet3保存网上办结率数据
+# 输入文件数据参考input.xlsx，输出文件数据参考outpu.xlsx
+# 需要在代码里指定输入文件的位置
+# ***********************************************************************************
+
+# 指定数据源
+file_path = "d:/data/input.xlsx"
+
+# 异常列表
+error_list = []
+
+# 工作表
+# Sheet1 政务服务相关事项源数据
+# Sheet2 网上办理服务相关事项源数据
+# Sheet3 网上办结率相关事项源数据
+sheet_names = ['Sheet1', 'Sheet2', 'Sheet3']
+
+# 部门编号
+depts_no = ['001008003015233','001008003015095','001008003015232','001008003015078','001008003015002'
+    ,'001008003015003','001008003015005','001008003015006','001008003015090','001008003015007'
+    ,'001008003015009','001008003015010','市财政局','001008003015012','001008003015013'
+    ,'001008003015026','001008003015015','001008003015019','001008003015101','001008003015020'
+    ,'001008003015004','001008003015021','001008003015022','001008003015224','001008003015092'
+    ,'001008003015236','001008003015036','001008003015067','市审计局','001008003015033'
+    ,'001008003015081','001008003015041','001008003015027','001008003015032','001008003015231'
+    ,'001008003015037','001008003015018','市政务服务局','001008003015089','001008003015105'
+    ,'001008003015075','市海事局','001008003015055','001008003015149','001008003015154'
+    ,'001008003015148','001008003015056','温州市乌岩岭国家自然保护区','001008003015113'
+    ]
+
+# 部门
+depts = ['市政府侨务办公室','市委编办','市档案局','市档案馆','市发改委'
+    ,'市经信局','市教育局','市科技局','市民宗局','市公安局'
+    ,'市民政局','市司法局','市财政局','市人力社保局','市自然资源和规划局'
+    ,'市生态环境局','市住建局','市交通运输局','市道路运输管理局','市水利局'
+    ,'市农业农村局','市商务局','市文化广电旅游局','市新闻出版局','市卫生健康委'
+    ,'市退役军人事务局','市应急管理局','市消防救援支队','市审计局','市外事办公室'
+    ,'市场监管局','市金融办','市体育局','市粮食和物资储备局','市医疗保障局'
+    ,'市人防办','市综合行政执法局','市政务服务局','市国家安全局','市住房公积金管理中心'
+    ,'市税务局','市海事局','市气象局','市燃气公司','市自来水公司'
+    ,'国网温州供电公司','市烟草专卖局','温州市乌岩岭国家自然保护区','中国人民银行温州市中心支行'
+    ]
+
+# ********************************************
+# 各个统计指标
+# [0-34]：各个部门索引，最后一个是总数；
+# 例如 plc[depts.index('市委编办')]：表示“市委编办”实现“跑零次”的项数
+
+# ********************sheet1处理数据********************
+# 政务服务项数
+zwfw_num = []
+
+# 跑零次项数
+# plc_num = [[]for i in range(34)]
+plc_num = []
+
+# 跑零次比率
+plc_num_rate = []
+
+# 即办项数
+jb_num = []
+
+# 即办比率
+jb_rate = []
+
+# 政务服务项数（剔除法定期限为无期限的）
+zwfw_finite_num = []
+
+# 事项法定期限平均值
+fdqx_avg = []
+
+# 事项承诺期限平均值
+cnqx_avg = []
+
+# 承诺期限压缩比
+ysb = []
+
+# ********************sheet2处理数据********************
+# 应实现事项数
+ysx_net_num = []
+
+# 已实现网上事项数
+ysx_pc_num = []
+
+# 网上实现率
+ysx_pc_rate = []
+
+# 已实现掌上事项数
+ysx_mobile_num = []
+
+# 已实现掌上率
+ysx_mobile_rate = []
+
+# ********************sheet2处理数据********************
+# 近期新增办件量
+recent_increase_bj_num = []
+
+# 近期新增网上办件量
+recent_increase_bj_net_num = []
+
+# 近期网上办结率
+recent_increase_bj_rate = []
+
+# ##########辅助数据############
+# 事项法定期限总天数
+fdqx_total = []
+
+# 事项承诺期限总天数
+cnqx_total = []
+
+def processData3():
+    # *********初始化设置*********
+    # 设置文件
+    file = file_path
+    # 打开文件
+    wb = load_workbook(file)
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H:%M:%S", localTime)
+    print(currentTime + '\t开始处理sheet3数据：' + file)
+
+
+    
+    # 列索引
+    # 部门名称
+    col_idx_dept_name = 'A'
+    # 新增办件总量
+    col_idx_xzbjl_num = 'B'
+    # 行政许可事项办件量
+    col_idx_xzxk_num = 'C'
+    # 行政许可事项网上申报率
+    col_idx_xzxk_rate = 'D'
+    # 其他类权力事项办件量
+    col_idx_qtl_num = 'E'
+    # 其他类权力事项网上申报率
+    col_idx_qtl_rate = 'F'
+    # 公共服务事项办件量
+    col_idx_ggfw_num = 'G'
+    # 公共服务事项网上申报率
+    col_idx_ggfw_rate = 'H'
+
+    sheet3 = wb['Sheet3']
+    sheet3_max_row = sheet3.max_row
+
+    depts_len = depts.__len__()
+
+    ############################
+    # 统计计算各个指标 sheet3：网上办结率
+    ############################
+    # 近期办件量、近期网上办件量
+    for i in range(depts_len + 1):
+        recent_increase_bj_num.append(0)
+        recent_increase_bj_net_num.append(0)
+    for index in range(3, sheet3_max_row + 1):
+        # 确定所属部门
+        cell_value_dept_name = sheet3[col_idx_dept_name + str(index)].value
+        if(not(depts.__contains__(str(cell_value_dept_name)))):
+            continue
+        # 获取部门索引号
+        deps_index = depts.index(cell_value_dept_name)
+        # 获取关键字段的值
+        cell_value_xzxk_num = int(sheet3[col_idx_xzxk_num + str(index)].value)
+        cell_value_xzxk_rate = float(str(sheet3[col_idx_xzxk_rate + str(index)].value).strip('%'))
+
+        cell_value_qtl_num = int(sheet3[col_idx_qtl_num + str(index)].value)
+        cell_value_qtl_rate = float(str(sheet3[col_idx_qtl_rate + str(index)].value).strip('%'))
+
+        cell_value_ggfw_num = int(sheet3[col_idx_ggfw_num + str(index)].value)
+        cell_value_ggfw_rate = float(str(sheet3[col_idx_ggfw_rate + str(index)].value).strip('%'))
+
+        bjl_num = cell_value_xzxk_num + cell_value_qtl_num + cell_value_ggfw_num
+        bjl_net_num = cell_value_xzxk_num * cell_value_xzxk_rate + cell_value_qtl_num * cell_value_qtl_rate + cell_value_ggfw_num * cell_value_ggfw_rate
+
+        recent_increase_bj_num[deps_index] = recent_increase_bj_num[deps_index] + bjl_num
+        recent_increase_bj_num[recent_increase_bj_num.__len__() -1 ] = recent_increase_bj_num[recent_increase_bj_num.__len__() -1 ] + bjl_num
+
+        recent_increase_bj_net_num[deps_index] = '{:.0f}'.format(float(recent_increase_bj_net_num[deps_index]) + bjl_net_num)
+        recent_increase_bj_net_num[recent_increase_bj_net_num.__len__() - 1] = '{:.0f}'.format(float(recent_increase_bj_net_num[recent_increase_bj_net_num.__len__() - 1]) + bjl_net_num)
+
+    # 网上办结率
+    for index in range(depts_len + 1):
+        # 如果分母为零，则记'-'
+        if (recent_increase_bj_num[index] == 0):
+            recent_increase_bj_rate.append('-')
+        # 如果分子为零，则记'0'
+        # elif (recent_increase_bj_net_num[index] == 0):
+        #     recent_increase_bj_rate.append(0)
+        # 其他情况，则计算比率
+        else:
+            recent_increase_bj_rate.append('{:.2f}%'.format(float(recent_increase_bj_net_num[index]) / recent_increase_bj_num[index] * 100))
+
+def processData2():
+    # *********初始化设置*********
+    # 设置文件
+    file = file_path
+    # 打开文件
+    wb = load_workbook(file)
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H:%M:%S", localTime)
+    print(currentTime + '\t开始处理sheet2数据：' + file)
+
+    # 列索引
+    # 办事者到办事地点最少次数
+    col_idx_plc = 'AD'
+    # 法定期限
+    col_idx_fdxq = 'AF'
+    # 承诺期限
+    col_idx_cnxq = 'AG'
+    # 部门名称
+    col_idx_dept_name = 'E'
+    # 部门编号
+    col_idx_dept_no = 'B'
+    # 权力基本码
+    col_idx_qlcode = 'C'
+    # 序号
+    col_idx_no = 'A'
+    # 在线申报地址
+    col_idx_pc = 'T'
+    # 移动端网上办理地址
+    col_idx_mobile = 'Y'
+
+    sheet2 = wb['Sheet2']
+    sheet2_max_row = sheet2.max_row
+
+    depts_len = depts.__len__()
+
+    ############################
+    # 统计计算各个指标 sheet2：网上实现率
+    ############################
+    # 应实现网上
+    for i in range(depts_len+1):
+        ysx_net_num.append(0)
+    for index in range(2, sheet2_max_row + 1):
+        # 确定所属部门
+        cell_value_dept_no = sheet2[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet2[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and  (not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        ysx_net_num[deps_index] = ysx_net_num[deps_index] + 1
+        ysx_net_num[ysx_net_num.__len__() - 1] = ysx_net_num[ysx_net_num.__len__() - 1] + 1
+
+    # 已实现网上办事项数
+    for i in range(depts_len+1):
+        ysx_pc_num.append(0)
+    for index in range(2, sheet2_max_row + 1):
+        # 确定所属部门
+        cell_value_dept_no = sheet2[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet2[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+        not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+        # 获取关键字段的值
+        cell_value_ysx_pc = sheet2[col_idx_pc + str(index)].value
+        # 判断是否有值，如果有，则对应部门的网上办理事项数加1
+        if (str(cell_value_ysx_pc).__contains__('http')):
+            ysx_pc_num[deps_index] = ysx_pc_num[deps_index] + 1
+            # 所有部门网上办理的总事项数+1
+            ysx_pc_num[ysx_pc_num.__len__() - 1] = ysx_pc_num[ysx_pc_num.__len__() - 1] + 1
+
+    # 已实现网上办事率
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if (ysx_net_num[index] == 0):
+            ysx_pc_rate.append('-')
+        # 如果分子为零，则记'0'
+        elif (ysx_pc_num[index] == 0):
+            ysx_pc_rate.append(0)
+        # 其他情况，则计算比率
+        else:
+            ysx_pc_rate.append('{:.2f}%'.format(ysx_pc_num[index] / ysx_net_num[index] * 100))
+
+    # 已实现掌上办事项数
+    for i in range(depts_len+1):
+        ysx_mobile_num.append(0)
+    for index in range(2, sheet2_max_row + 1):
+        # 确定所属部门
+        cell_value_dept_no = sheet2[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet2[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值
+        cell_value_ysx_mobile = sheet2[col_idx_mobile + str(index)].value
+        # 判断是否有值，如果有，则对应部门的掌上办理事项数加1
+        if (str(cell_value_ysx_mobile).__contains__('http')):
+            ysx_mobile_num[deps_index] = ysx_mobile_num[deps_index] + 1
+            # 所有部门掌上办理的总事项数+1
+            ysx_mobile_num[ysx_mobile_num.__len__() - 1] = ysx_mobile_num[ysx_mobile_num.__len__() - 1] + 1
+
+    # 已实现掌上办事率
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if (ysx_net_num[index] == 0):
+            ysx_mobile_rate.append('-')
+        # 如果分子为零，则记'0'
+        elif (ysx_mobile_num[index] == 0):
+            ysx_mobile_rate.append(0)
+        # 其他情况，则计算比率
+        else:
+            ysx_mobile_rate.append('{:.2f}%'.format(ysx_mobile_num[index] / ysx_net_num[index] * 100))
+
+def processData1():
+    # *********初始化设置*********
+    # 设置文件
+    file = "d:/data/test.xlsx"
+    file = file_path
+    # 打开文件
+    wb = load_workbook(file)
+
+    # 列索引
+    # 办事者到办事地点最少次数
+    col_idx_plc = 'AD'
+    # 法定期限
+    col_idx_fdxq = 'AF'
+    # 承诺期限
+    col_idx_cnxq = 'AG'
+    # 部门名称
+    col_idx_dept_name = 'E'
+    # 部门编号
+    col_idx_dept_no = 'B'
+    # 权力基本码
+    col_idx_qlcode = 'C'
+    # 序号
+    col_idx_no = 'A'
+
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H:%M:%S", localTime)
+    print(currentTime + '\t开始处理sheet1数据：' + file)
+
+    sheet1 = wb['Sheet1']
+    sheet1_max_row = sheet1.max_row
+
+    depts_len = depts.__len__()
+
+    ############################
+    # 统计计算各个指标 sheet1：政务服务、跑零次、即办、承诺压缩比
+    ############################
+    # 政务服务事项
+    for i in range(depts_len+1):
+        zwfw_num.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        zwfw_num[deps_index] = zwfw_num[deps_index] + 1
+        zwfw_num[zwfw_num.__len__()-1] = zwfw_num[zwfw_num.__len__()-1] + 1
+
+    # 跑零次事项
+    for i in range(depts_len+1):
+        plc_num.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值
+        cell_value_plc = sheet1[col_idx_plc + str(index)].value
+        if(str(cell_value_plc).strip() == ''):
+            continue
+        # 判断是否属于跑零次事项，如果属于，则对应部门的跑零次事项加1
+        if(int(cell_value_plc) == 0):
+            plc_num[deps_index] = plc_num[deps_index] + 1
+            # 所有部门跑零次的总事项数+1
+            plc_num[plc_num.__len__()-1] = plc_num[plc_num.__len__()-1] + 1
+
+    # 跑零次事项比率
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if(zwfw_num[index] == 0):
+            plc_num_rate.append('-')
+        # 如果分子为零，则记'0'
+        elif(plc_num[index] == 0):
+            plc_num_rate.append(0)
+        # 其他情况，则计算比率
+        else:
+            plc_num_rate.append('{:.2f}%'.format(plc_num[index] / zwfw_num[index] * 100))
+
+    # 即办事项数
+    for i in range(depts_len+1):
+        jb_num.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值
+        cell_value_jb = sheet1[col_idx_cnxq + str(index)].value
+        # 判断是否属于即办事项，如果属于，则对应部门的即办事项数加1
+        if(str(cell_value_jb.strip()).__contains__('即办')):
+            jb_num[deps_index] = jb_num[deps_index] + 1
+            # 所有部门即办的总事项数+1
+            jb_num[jb_num.__len__()-1] = jb_num[jb_num.__len__()-1] + 1
+
+    # 即办事项比率
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if(zwfw_num[index] == 0):
+            jb_rate.append('-')
+        # 如果分子为零，则记'0'
+        elif(jb_num[index] == 0):
+            jb_rate.append(0)
+        # 其他情况，则计算比率
+        else:
+            jb_rate.append('{:.2f}%'.format(jb_num[index] / zwfw_num[index] * 100))
+
+    # 剔除法定期限为无期限的政务服务事项数
+    for i in range(depts_len+1):
+        zwfw_finite_num.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值（法定期限）
+        cell_value_fdqx = sheet1[col_idx_fdxq + str(index)].value
+        # 判断是否法定期限是否为无期限，如果否，则对应部门的非无期限的政务服务事项数加1
+        if(not(str(cell_value_fdqx.strip()).__contains__('无期限'))):
+            zwfw_finite_num[deps_index] = zwfw_finite_num[deps_index] + 1
+            # 所有部门非无期限的政务服务总事项数+1
+            zwfw_finite_num[zwfw_finite_num.__len__()-1] = zwfw_finite_num[zwfw_finite_num.__len__()-1] + 1
+
+    # 剔除法定期限为无期限的法定期限天数
+    for i in range(depts_len+1):
+        fdqx_total.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值（法定期限）
+        cell_value_fdqx = sheet1[col_idx_fdxq + str(index)].value
+        # 获取关键字段的值（承诺期限）
+        cell_value_cnqx = sheet1[col_idx_cnxq + str(index)].value
+        # 判断是否法定期限是否为无期限，如果否，则对应部门的非无期限的法定期限总数累加
+        if(not(str(cell_value_fdqx.strip()).__contains__('无期限'))):
+            if (not (str(cell_value_cnqx.strip()).__contains__('无期限'))):
+                fdqx = int(transferDate(cell_value_fdqx))
+                if (fdqx == -1):
+                    continue
+                fdqx_total[deps_index] = fdqx_total[deps_index] + fdqx
+                # 所有部门非无期限的总法定期限数累加
+                fdqx_total[fdqx_total.__len__()-1] = fdqx_total[fdqx_total.__len__()-1] + fdqx
+            # 法定期限不是无期限，但承诺期限却是无期限，则加入到异常列表中
+            else:
+                error_obj = str(sheet1[col_idx_no + str(index)].value) + '\t' + str(sheet1[col_idx_dept_name + str(index)].value) + '\t' + str(sheet1[col_idx_qlcode + str(index)].value)
+                error_list.append(error_obj)
+
+    # 剔除法定期限为无期限的法定期限平均天数
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if(zwfw_finite_num[index] == 0):
+            fdqx_avg.append('-')
+        # 如果分子为零，则记'0'
+        elif(fdqx_total[index] == 0):
+            fdqx_avg.append(0)
+        # 其他情况，则计算法定平均天数
+        else:
+            fdqx_avg.append('{:.2f}'.format(fdqx_total[index] / zwfw_finite_num[index]))
+
+    # 剔除法定期限为无期限的承诺期限天数
+    for i in range(depts_len+1):
+        cnqx_total.append(0)
+    for index in range(2, sheet1_max_row+1):
+        # 确定所属部门
+        cell_value_dept_no = sheet1[col_idx_dept_no + str(index)].value
+        cell_value_dept_name = sheet1[col_idx_dept_name + str(index)].value
+        if ((not (depts_no.__contains__(str(cell_value_dept_no)))) and (
+                not (depts.__contains__(str(cell_value_dept_name))))):
+            continue
+
+        # 获取部门索引号
+        if (depts_no.__contains__(str(cell_value_dept_no))):
+            deps_index = depts_no.index(cell_value_dept_no)
+        else:
+            deps_index = depts.index(cell_value_dept_name)
+
+        # 获取关键字段的值（法定期限）
+        cell_value_fdqx = sheet1[col_idx_fdxq + str(index)].value
+        # 获取关键字段的值（承诺期限）
+        cell_value_cnqx = sheet1[col_idx_cnxq + str(index)].value
+        # 判断是否法定期限是否为无期限，如果否，则对应部门的非无期限的法定期限总数累加
+        if (not (str(cell_value_fdqx.strip()).__contains__('无期限'))):
+            if(not(str(cell_value_cnqx.strip()).__contains__('无期限'))):
+                cnqx = int(transferDate(cell_value_cnqx))
+                if(cnqx == -1):
+                    continue
+                cnqx_total[deps_index] = cnqx_total[deps_index] + cnqx
+                # 所有部门非无期限的总承诺期限数累加
+                cnqx_total[cnqx_total.__len__()-1] = cnqx_total[cnqx_total.__len__()-1] + cnqx
+            else:
+                # 已经在计算法定期限天数时添加到异常列表，故此处忽略
+                continue
+
+    # 剔除法定期限为无期限的承诺期限平均天数
+    for index in range(depts_len+1):
+        # 如果分母为零，则记'-'
+        if(zwfw_finite_num[index] == 0):
+            cnqx_avg.append('-')
+        # 如果分子为零，则记'0'
+        elif(cnqx_total[index] == 0):
+            cnqx_avg.append(0)
+        # 其他情况，则计算承诺平均天数
+        else:
+            cnqx_avg.append('{:.2f}'.format(cnqx_total[index] / zwfw_finite_num[index]))
+
+    # 承诺期限压缩比
+    for index in range(depts_len+1):
+        if((str(fdqx_avg[index]).__contains__('-')) or (str(cnqx_avg[index]).__contains__('-')) or (fdqx_avg[index] == 0)):
+            ysb.append('-')
+        else:
+            avg_fdqx = float(fdqx_avg[index])
+            avg_cnqx = float(cnqx_avg[index])
+            avg_delta = avg_fdqx - avg_cnqx
+            ysb.append('{:.2f}%'.format(avg_delta / avg_fdqx * 100))
+
+def dataOut():
+    # *****************输出到excel*****************
+    # 定义每个输出工作表的列名
+    # 汇总表
+    sheet_out_headers_hz = ['部门','应实现网上','已实现网上','网上实现率','已实现掌上'
+    ,'掌上实现率','政务服务数量','跑零次数量','跑零次比例','即办数量'
+    ,'即办比例','平均法定期限','平均承诺期限','压缩比','近30天办件量'
+    ,'近30天网上办理数','网上办结率']
+
+    # 网上、掌上办实现率
+    sheet_out_headers_wszsb = ['部门','应实现网上','已实现网上','网上实现率','已实现掌上'
+    ,'掌上实现率']
+
+    # 跑零次实现率
+    sheet_out_headers_plc = ['部门','政务服务数量', '跑零次数量', '跑零次比例']
+
+    # 即办比例
+    sheet_out_headers_jb = ['部门','政务服务数量','即办数量','即办比例']
+
+    # 承诺压缩比
+    sheet_out_headers_cnysb = ['部门', '政务服务数量', '平均法定期限', '平均承诺期限', '压缩比']
+
+    # 网上办结率
+    sheet_out_headers_wsbjl = ['部门', '近30天办件量', '近30天网上办理数', '网上办结率']
+
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+    wb_out = Workbook()
+
+    # 设置汇总表
+    sheet_out_hz = wb_out.active
+    sheet_out_hz.title = '汇总表'
+    # 设置列名、列宽
+    for index in range(1, sheet_out_headers_hz.__len__() + 1):
+        sheet_out_hz.cell(row=1, column=index, value=sheet_out_headers_hz[index-1])
+
+    # 设置每列的值
+    for column_index in range(1, sheet_out_headers_hz.__len__() + 1):
+        column_name = sheet_out_headers_hz[column_index-1]
+        dataList = getData(column_name)
+        for index1 in range(1, dataList.__len__() + 2):
+            if(index1 == dataList.__len__() + 1):
+                if(column_name.__contains__('部门')):
+                    sheet_out_hz.cell(row=index1 + 1, column=column_index, value='总计')
+                else:
+                    # sheet_out_hz.cell(row=index1 + 1, column=column_index, value=dataList[index1 - 1])
+                    break
+                break
+            else:
+                sheet_out_hz.cell(row=index1 + 1, column=column_index, value=dataList[index1 - 1])
+
+    # 设置样式：列宽
+    for index in range(1, sheet_out_headers_hz.__len__() + 1):
+        column_letter = get_column_letter(index)
+        # column_index_from_string('A')
+        sheet_out_hz.column_dimensions[column_letter].width = 12
+    sheet_out_hz.column_dimensions['A'].width = 20
+
+    # 设置样式：对齐、字体等
+    header_10_font = Font(name='等线', size=12, italic=False, bold=True)
+    body_10_font = Font(name='等线', size=10, italic=False, bold=False)
+    for row in sheet_out_hz.rows:
+        for index in range(len(row)):
+            coordinate = row[index].coordinate
+            sheet_out_hz[coordinate].alignment = Alignment(horizontal='center', vertical='center')
+            if(row[index].row == 1):
+                sheet_out_hz[coordinate].font = header_10_font
+            else:
+                sheet_out_hz[coordinate].font = body_10_font
+
+    # for col in sheet_out_hz.columns:
+    #     for index in range(len(col)):
+    #         coordinate = col[index].coordinate
+    #         sheet_out_hz[coordinate].alignment = Alignment(horizontal='center', vertical='center')
+    #         sheet_out_hz[coordinate].font = bold_itatic_10_font
+
+    # 设置网上、掌上办实现率表
+    # TODO
+
+    # 保存文件并输出
+    wb_out.save('d:/data/out' + currentTime + '.xlsx')
+
+def getData(column_name):
+    ret = []
+    if (str(column_name).__contains__('部门')):
+        ret = depts
+    elif (str(column_name).__contains__('应实现网上')):
+        ret = ysx_net_num
+    elif (str(column_name).__contains__('已实现网上')):
+        ret = ysx_pc_num
+    elif (str(column_name).__contains__('网上实现率')):
+        ret = ysx_pc_rate
+    elif (str(column_name).__contains__('已实现掌上')):
+        ret = ysx_mobile_num
+    elif (str(column_name).__contains__('掌上实现率')):
+        ret = ysx_mobile_rate
+    elif (str(column_name).__contains__('政务服务数量')):
+        ret = zwfw_num
+    elif (str(column_name).__contains__('跑零次数量')):
+        ret = plc_num
+    elif (str(column_name).__contains__('跑零次比例')):
+        ret = plc_num_rate
+    elif (str(column_name).__contains__('即办数量')):
+        ret = jb_num
+    elif (str(column_name).__contains__('即办比例')):
+        ret = jb_rate
+    elif (str(column_name).__contains__('平均法定期限')):
+        ret = fdqx_avg
+    elif (str(column_name).__contains__('平均承诺期限')):
+        ret = cnqx_avg
+    elif (str(column_name).__contains__('压缩比')):
+        ret = ysb
+    elif (str(column_name).__contains__('近30天办件量')):
+        ret = recent_increase_bj_num
+    elif (str(column_name).__contains__('近30天网上办理数')):
+        ret = recent_increase_bj_net_num
+    elif (str(column_name).__contains__('网上办结率')):
+        ret = recent_increase_bj_rate
+    else:
+        raise Exception("Invalid column_name!", column_name)
+    return  ret
+
+def transferDate(data):
+    data = str(data).replace(' ','').replace('\t','').replace('\n','').strip()
+    if((data.__contains__('工作日')) or (data.__contains__('天'))):
+        data = data.replace('工作日', '').replace('天', '')
+        if(data == ''):
+            return -1
+        data = int(float(data.replace('工作日','').replace('天','')))
+    elif((data.__contains__('月'))):
+        data = int(data.replace('月', '')) * 22
+    elif((data.__contains__('年'))):
+        data = int(data.replace('年', '')) * 250
+    elif((data.__contains__('即办'))):
+        data = 0
+    else:
+        raise Exception("Invalid date!", data)
+    return data
+
+def processCore():
+    processData1()
+    processData2()
+    processData3()
+    dataOut()
+    print('******************异常数据******************\n')
+    print(error_list)
+
+
+if __name__ == '__main__':
+    processCore()
