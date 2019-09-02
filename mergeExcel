@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+# coding=utf-8
+
+import sys
+import os
+import time
+import pandas as pd
+import xlrd
+from pandas import DataFrame
+from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.styles import Color,Font,Alignment,PatternFill,Border,Side,Protection
+
+###############################################################
+# 将多个Excel文件（本案中是多个县市区的组织信息）的内容进行合并
+###############################################################
+
+localTime = time.localtime(time.time())
+currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+
+def eachFile(filepath):
+    pathDir =  os.listdir(filepath)
+    for allDir in pathDir:
+        child = os.path.join('%s%s' % (filepath, allDir))
+        # print(child.decode('gbk')) # .decode('gbk')是解决中文显示乱码问题
+        print(str(child))
+
+def get_file(root_path,all_files=[]):
+    # 递归函数，遍历该文档目录和子目录下的所有文件，获取其path
+    files = os.listdir(root_path)
+    for file in files:
+        if not os.path.isdir(root_path + '/' + file):   # not a dir
+            all_files.append(root_path + '/' + file)
+        else:  # is a dir
+            get_file((root_path+'/'+file),all_files)
+    return all_files
+
+def mergeExcel(files):
+    # 指定输出位置
+    file_out_path = 'd:/data/out/' + currentTime + '.xlsx'
+    wb_out = Workbook()
+    sheet_out_hz = wb_out.active
+    sheet_out_hz.title = '汇总表'
+    wb_out.save(file_out_path)
+
+    alldata = DataFrame()
+    for file in files:
+        wb = load_workbook(file)
+        all_sheets = wb.get_sheet_names()
+        sheet = all_sheets[0]
+        df = pd.read_excel(file, sheet_name=0, index=False, encoding='gbk', skiprows= 1, converters={'组织编码':str, '原组织编码':str})
+        alldata = alldata.append(df)
+
+    # 保存为新的sheet,首先新建sheet,合并后的数据保存到新sheet中
+    writer = pd.ExcelWriter(file_out_path, engin='openpyxl')
+    book = load_workbook(writer.path)
+    writer.book = book
+
+    # 利用dataframe.to_excel保存合并后的数据到新的sheet
+    alldata.to_excel(excel_writer=writer, sheet_name="汇总")
+    writer.save()
+    writer.close()
+
+
+if __name__ == '__main__':
+    file_path = 'C:\\Users\\DELL\\Desktop\\工作记录\\组织机构'
+    root_dir = []
+    files = get_file(file_path,root_dir)
+    for file in files:
+        print(file)
+
+    mergeExcel(files)
+
+    print('ok')
