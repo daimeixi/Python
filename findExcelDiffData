@@ -1,0 +1,174 @@
+import datetime
+from random import choice
+import time
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl import Workbook
+from openpyxl.styles import Color,Font,Alignment,PatternFill,Border,Side,Protection
+
+# ************************************说明***************************************
+# 根据通办范围字段，将两个Excel中不同的记录进行比对
+# ***********************************************************************************
+
+localTime = time.localtime(time.time())
+currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+# 指定数据源
+# file_path = "D:\\工作\\权力事项统计\\事项对应部门账号\\data\\user.xlsx"
+file_path = "D:\\data\\20190830\\input.xlsx"
+file_path_out = "D:\\data\\20190830\\output"+currentTime+".xlsx"
+
+# 温州表数据
+# 权力基本码
+wz_qljbm = []
+# 通办事项标志
+wz_tb = []
+
+# 宁波表数据
+nb_qljbm = []
+nb_tb = []
+
+# 丽水数据
+ls_qljbm = []
+ls_tb = []
+
+# 结果数据 0:对标地市已完成 1：对标地市未完成 2：温州已完成 3：对标地市未找到对应事项
+# 对比宁波
+ret = []
+# 对比丽水
+ret2 = []
+# 综合比对
+ret3 = []
+
+
+def processData():
+    # *********初始化设置*********
+    # 打开文件
+    wb = load_workbook(file_path)
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+    print(currentTime + '\t开始处理数据')
+
+    # 表列索引
+    # 全力基本码
+    col_idx_qljbm = 'C'
+    # 通办事项标志
+    col_idx_tb = 'BE'
+
+    sheet_wz = wb['Sheet1']
+    sheet_nb = wb['Sheet2']
+    sheet_ls = wb['Sheet3']
+
+    sheet_wz_max_row = sheet_wz.max_row
+    sheet_nb_max_row = sheet_nb.max_row
+    sheet_ls_max_row = sheet_ls.max_row
+
+    # 加载用户表数据
+    for index in range(2, sheet_wz_max_row+1):
+        cell_value_qljbm = dataFormat(str(sheet_wz[col_idx_qljbm + str(index)].value))
+        cell_value_tb = dataFormat(str(sheet_wz[col_idx_tb + str(index)].value))
+        wz_qljbm.append(cell_value_qljbm)
+        wz_tb.append(cell_value_tb)
+
+    for index in range(2, sheet_nb_max_row+1):
+        cell_value_qljbm = dataFormat(str(sheet_nb[col_idx_qljbm + str(index)].value))
+        cell_value_tb = dataFormat(str(sheet_nb[col_idx_tb + str(index)].value))
+        nb_qljbm.append(cell_value_qljbm)
+        nb_tb.append(cell_value_tb)
+
+    for index in range(2, sheet_ls_max_row+1):
+        cell_value_qljbm = dataFormat(str(sheet_ls[col_idx_qljbm + str(index)].value))
+        cell_value_tb = dataFormat(str(sheet_ls[col_idx_tb + str(index)].value))
+        ls_qljbm.append(cell_value_qljbm)
+        ls_tb.append(cell_value_tb)
+
+    # 遍历温州表，对比宁波
+    for index in range(wz_qljbm.__len__()):
+        tar_index = -1
+        qljbm = wz_qljbm[index]
+        try:
+            tar_index = nb_qljbm.index(qljbm)
+            nb_tb_item = nb_tb[tar_index]
+            ret.append(nb_tb_item)
+        except:
+            ret.append("未找到匹配的权力事项")
+        # if(str(wz_tb[index])=='无' or str(wz_tb[index])==''):
+        #     tar_index = -1
+        #     qljbm = wz_qljbm[index]
+        #     try:
+        #         tar_index = nb_qljbm.index(qljbm)
+        #         nb_tb_item = nb_tb[tar_index]
+        #         if (str(nb_tb_item) == '无' or str(nb_tb_item) == ''):
+        #             ret.append("1")
+        #         else:
+        #             ret.append("0")
+        #     except:
+        #         print('宁波未找到匹配的权力事项：' + qljbm)
+        #         ret.append("3")
+        # else:
+        #     ret.append("2")
+
+    # 遍历温州表，对比丽水
+    for index in range(wz_qljbm.__len__()):
+        tar_index = -1
+        qljbm = wz_qljbm[index]
+        try:
+            tar_index = ls_qljbm.index(qljbm)
+            ls_tb_item = ls_tb[tar_index]
+            ret2.append(ls_tb_item)
+        except:
+            ret2.append("未找到匹配的权力事项")
+
+        # if(str(wz_tb[index]) == '无' or str(wz_tb[index]) == ''):
+        #     tar_index = -1
+        #     qljbm = wz_qljbm[index]
+        #     try:
+        #         tar_index = ls_qljbm.index(qljbm)
+        #         ls_tb_item = ls_tb[tar_index]
+        #         if (str(ls_tb_item) == '无' or str(ls_tb_item) == ''):
+        #             ret2.append("1")
+        #         else:
+        #             ret2.append("0")
+        #     except:
+        #         print('丽水未找到匹配的权力事项：' + qljbm)
+        #         ret2.append("3")
+        # else:
+        #     ret2.append("2")
+
+    # for index in range(ret.__len__()):
+    #     if(not(str(wz_tb[index]) == '无' or str(wz_tb[index]) == '')):
+    #         ret3.append("2")
+    #     elif(ret[index]=="0" or ret2[index]=="0"):
+    #         # 宁波或丽水已完成，温州需要提高的部分
+    #         ret3.append("0")
+    #     else:
+    #         ret3.append("1")
+
+
+    # 将匹配的结果写回excel
+    sheet_out = wb.create_sheet()  # 默认插在工作簿末尾
+    sheet_out.title = '结果数据'
+    # sheet_out.active
+    # 从第二行开始写入
+    for index in range(wz_qljbm.__len__()):
+        sheet_out.cell(row=index+2, column=1, value=wz_qljbm[index])
+    for index in range(wz_tb.__len__()):
+        sheet_out.cell(row=index+2, column=1, value=wz_tb[index])
+    for index in range(ret.__len__()):
+        sheet_out.cell(row=index+2, column=2, value=ret[index])
+        # sheet_out.cell(row=index+2, column=2, value=nb_tb[index])
+    for index in range(ret.__len__()):
+        sheet_out.cell(row=index+2, column=3, value=ret2[index])
+        # sheet_out.cell(row=index+2, column=3, value=ls_tb[index])
+    # for index in range(ret.__len__()):
+        # sheet_out.cell(row=index + 2, column=4, value=ret3[index])
+        # sheet_out.cell(row=index + 2, column=4, value=ret3[index])
+
+
+    wb.save(file_path_out)
+
+def dataFormat(data):
+    data = str(data).replace(' ', '').replace('\t', '').replace('\n', '').strip()
+    return data
+
+if __name__ == '__main__':
+    processData()
