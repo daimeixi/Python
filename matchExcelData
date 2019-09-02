@@ -1,0 +1,108 @@
+import datetime
+from random import choice
+import time
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl import Workbook
+from openpyxl.styles import Color,Font,Alignment,PatternFill,Border,Side,Protection
+
+# ************************************说明***************************************
+# 将权力事项和政务服务网账号进行匹配并输出结果
+# ***********************************************************************************
+
+# 指定数据源
+file_path_user = "D:\\工作\\权力事项统计\\事项对应部门账号\\data\\user.xlsx"
+file_path_org = "D:\\工作\\权力事项统计\\事项对应部门账号\\data\\org.xlsx"
+file_path_user_out = "D:\\工作\\权力事项统计\\事项对应部门账号\\data\\user_out.xlsx"
+
+# 用户表组织信息
+user_org = []
+# 规范化的组织表组织信息
+org_org = []
+# 组织表组织编码
+org_orgid = []
+# 组织表原组织编码
+org_srcorgid = []
+# 保存用户表对应的组织编码
+user_org_orgid = []
+# 保存用户表对应的原组织编码
+user_org_srcorgid = []
+
+def processData():
+    # *********初始化设置*********
+    # 打开文件
+    wb_user = load_workbook(file_path_user)
+    wb_org = load_workbook(file_path_org)
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+    print(currentTime + '\t开始处理数据')
+
+    # 用户表列索引
+    # 所属组织
+    col_idx_user_org = 'B'
+
+    # 组织表列索引
+    # 所属地区
+    col_idx_org_org_area = 'C'
+    # 部门名称
+    col_idx_org_org_name = 'B'
+    # 组织编码
+    col_idx_org_org_id = 'K'
+    # 原组织编码
+    col_idx_org_org_src_id = 'M'
+
+    sheet_user = wb_user['Sheet1']
+    sheet_org = wb_org['Sheet1']
+
+    sheet_user_max_row = sheet_user.max_row
+    sheet_org_max_row = sheet_org.max_row
+
+    # 加载用户表数据
+    for index in range(3, sheet_user_max_row+1):
+        cell_value_user_org = dataFormat(str(sheet_user[col_idx_user_org + str(index)].value))
+        user_org.append(cell_value_user_org)
+
+    # 加载组织表数据
+    for index in range(2, sheet_org_max_row+1):
+        cell_value_org_area = dataFormat(str(sheet_org[col_idx_org_org_area + str(index)].value))
+        cell_value_org_name = dataFormat(str(sheet_org[col_idx_org_org_name + str(index)].value))
+        cell_value_org_fmt = dataFormat(str(cell_value_org_area)[5:cell_value_org_area.__len__()] + "->" +cell_value_org_name)
+        cell_value_org_org_id = dataFormat(str(sheet_org[col_idx_org_org_id + str(index)].value))
+        cell_value_org_org_src_id = dataFormat(str(sheet_org[col_idx_org_org_src_id + str(index)].value))
+        org_org.append(cell_value_org_fmt)
+        org_orgid.append(cell_value_org_org_id)
+        org_srcorgid.append(cell_value_org_org_src_id)
+
+    # 遍历用户表，查找并记录数据
+    for index in range(user_org.__len__()):
+        tar_index = -1
+        user_org_item = user_org[index]
+        try:
+            tar_index = org_org.index(user_org_item)
+        except:
+            print('未匹配的组织：' + user_org[index])
+        if(tar_index != -1):
+            user_org_orgid.append(org_orgid[tar_index])
+            user_org_srcorgid.append(org_srcorgid[tar_index])
+        else:
+            user_org_orgid.append('')
+            user_org_srcorgid.append('')
+
+    # 将匹配的结果写回excel
+    sheet_out = wb_user.create_sheet()  # 默认插在工作簿末尾
+    sheet_out.title = '结果数据'
+    # sheet_out.active
+    # 从第二行开始写入
+    for index in range(user_org_orgid.__len__()):
+        sheet_out.cell(row=index+2, column=1, value=user_org_orgid[index])
+    for index in range(user_org_srcorgid.__len__()):
+        sheet_out.cell(row=index+2, column=2, value=user_org_srcorgid[index])
+
+    wb_user.save(file_path_user_out)
+
+def dataFormat(data):
+    data = str(data).replace(' ', '').replace('\t', '').replace('\n', '').strip()
+    return data
+
+if __name__ == '__main__':
+    processData()
