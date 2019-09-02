@@ -1,0 +1,373 @@
+import datetime
+from random import choice
+import time
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter, column_index_from_string
+from openpyxl import Workbook
+from openpyxl.styles import Color,Font,Alignment,PatternFill,Border,Side,Protection
+
+# **********************************************************
+# 将权力事项对应的各地区、各部门的政务服务网账号信息进行匹配
+# **********************************************************
+
+
+# 指定数据源
+file_path = "d:/data/20190826/input.xlsx"
+
+localTime = time.localtime(time.time())
+currentTime = time.strftime("%Y-%m-%d %H%M%S", localTime)
+# 指定输出位置
+file_out_path = 'd:/data/out/' + currentTime + '.xlsx'
+
+# 异常列表
+error_list = []
+
+# 计数器
+suc_count = 0
+
+# 工作表
+# Sheet1 政务服务相关事项源数据
+# Sheet2 用户数据
+sheet_names = ['Sheet1', 'Sheet2']
+
+# 保存事项表的信息
+# 序号
+ret_sx_xh = []
+# 权力基本码
+ret_sx_qljbm = []
+# 权力内部编码
+ret_sx_qlnbbm = []
+# 组织编码
+ret_sx_dept_nos = []
+# 部门名称
+ret_sx_dept_names = []
+
+
+# 保存用户表的信息
+# 地区、部门信息
+ret_user_area_dept = []
+# 账号
+ret_user_accounts = []
+# 用户ID
+ret_user_userids = []
+# 地区信息
+ret_user_area = []
+# 部门信息
+ret_user_dept = []
+# 组织编码
+ret_user_orgids = []
+
+# 保存事项表对应的用户表映射结果
+# 账号
+ret_sx_user_accounts = []
+# 用户ID
+ret_sx_user_userids = []
+# 地区名称
+ret_sx_user_area_names = []
+# 组织编码
+ret_sx_user_orgids = []
+
+# 事项表列索引
+# 序号
+sx_col_idx_xh = 'A'
+# 部门编码
+sx_col_idx_dept_no = 'B'
+# 权力基本码
+sx_col_idx_qljbm = 'C'
+# 权力内部编码
+sx_col_idx_qlnbbm = 'D'
+# 部门名称
+sx_col_idx_dept_name = 'E'
+
+# 用户表列索引
+# 部门、地区
+user_col_idx_dept_area = 'B'
+# 账号
+user_col_idx_account = 'I'
+# 用户ID
+user_col_idx_userid = 'J'
+# 组织编码
+user_col_idx_orgid = 'P'
+
+
+# 地区编码
+areas_no = ['001008003001','001008003002','001008003003','001008003004','001008003005','001008003006','001008003007','001008003008','001008003009','001008003010','001008003011','001008003012','001008003013','001008003014','001008003015','001008003016']
+areas_name = ['鹿城','龙湾','经开区','瑞安','瓯江口','洞头','科技城','平阳','苍南','文成','泰顺','瓯海','乐清','永嘉','市本级','生态园']
+
+dept_names_dict = {}
+dept_names_dict['住建，住建局，住房和城乡建设局，住房和建设局，住房与建设局，规划建设局，住房和城乡规划建设局'] = "住建局"
+dept_names_dict['交运，交运局，交通，交通局，交通运输，交通运输局'] = "交通运输局"
+dept_names_dict['道路运输管理所，道路运输管理局，运管局'] = "运管局"
+dept_names_dict['公路管理局，公路局'] = "公路局"
+dept_names_dict['发改局，发改委，发改，发展和改革局，发展和改革委员会，发展和改革局（县粮食局、县物价局）'] = "发改委"
+dept_names_dict['经济和信息化局，经信局，经济商务商务和信息化局'] = "经信局"
+dept_names_dict['供销联社，供销合作社联合社，供销社'] = "供销合作社联合社"
+dept_names_dict['国土局，国土资源局，国土分局，国土资源分局，自然资源和规划局，自然资源和规划洞头分局（海洋局）'] = "自然资源和规划局"
+dept_names_dict['民卫计局，民政卫生和计划生育局，民政卫生与计划生育局，卫计局，卫健局，卫生局，卫生健康局，人口和计划生育(卫生)局，卫生计生局'] = "卫计局"
+dept_names_dict['科技局，科学技术局'] = "科技局"
+dept_names_dict['民族宗教事务局，民宗局'] = "民宗局"
+dept_names_dict['城市管理局，城管执法局，综合执法局，综合行政执法局，城管与执法局'] = "综合执法局"
+dept_names_dict['公安洞头分局，公安局'] = "公安局"
+dept_names_dict['海洋与渔业局，海洋渔业局'] = "海洋与渔业局"
+dept_names_dict['公积金分中心，住房公积金管理中心，住房公积金洞头分中心，公积金苍南分中心，公积金永嘉分中心，住房公积金管理中心文成分中心'] = "住房公积金管理中心"
+dept_names_dict['烟草局，烟草专卖局'] = "烟草专卖局"
+dept_names_dict['编办，编委办，委编办，机构编制委员会办公室'] = "编办"
+dept_names_dict['国税局，地税局，税务局'] = "税务局"
+dept_names_dict['台办，台务，台务办'] = "台务办"
+dept_names_dict['农办（农业局、扶贫办），农业农村局'] = "农业农村局"
+dept_names_dict['生态环境局，生态环境分局，温州市生态环境局文成分局，环保局'] = "生态环境局"
+dept_names_dict['安监局，应急管理局'] = "应急管理局"
+dept_names_dict['残联，残疾人联合会'] = "残联"
+dept_names_dict['供水有限责任公司，供水公司'] = "供水公司"
+dept_names_dict['市监局，市场监督局，市场监管局，市场监督管理局，工商行政管理局，市场监督管理局（工商局、食药监局）'] = "市场监督局"
+dept_names_dict['文广旅游体育局（县文物局），文广新局，文广旅体局'] = "文广旅体局"
+dept_names_dict['移民服务中心，移民安置办公室'] = "移民安置办公室"
+dept_names_dict['政府房屋土地征收服务中心，政府房屋土地征收管理办公室'] = "政府房屋土地征收管理办公室"
+dept_names_dict['人行，人民银行，人行温州市中心支行，中国人民银行温州市中心支行'] = "人民银行"
+
+
+# 获取事项表记录的地区编码
+def getSxArea(dept_no):
+    area_no = str(dept_no).strip()[0:12]
+    for area_index in range(areas_no.__len__()):
+        if(areas_no[area_index]==area_no):
+            return area_no
+    raise Exception("Invalid area no!", dept_no)
+
+# 获取用户表的地区编码
+def getUserArea(content):
+    items = str(content).strip().split('->')
+    # 处理县的情况
+    if(str(content).__contains__('县（市、区）') and items[2].__contains__('县（市、区）')):
+        for area_index in range(areas_name.__len__()):
+            # 取第三个切割字段
+            if(items[3].__contains__(areas_name[area_index])):
+                return areas_no[area_index]
+    # 市本级直接返回
+    else:
+        return areas_no[14]
+
+# 定义剔除关键词列表
+del_keywords = ['市','区','县','鹿城区','洞头县','洞头区','经济技术开发区','苍南县','经开区','乐清市','龙湾区','瓯海区','平阳县','瑞安市','泰顺县','文成县','永嘉县','温州市']
+
+# 获取事项表记录的规范化部门名称
+def getSxDeptName(content):
+    dept_name = str(content).strip()
+    for del_keyword in del_keywords:
+        if(dept_name.startswith(del_keyword)):
+            # ret = dept_name.replace(del_keyword,'')
+            ret = str(dept_name)[del_keyword.__len__():dept_name.__len__()]
+            return ret
+    return  dept_name
+
+# 获取用户表的规范化部门名称
+def getUserDeptName(content):
+    try:
+        items = str(content).strip().split('->')
+        # 县的情况
+        if (str(content).__contains__('县（市、区）') and str(items[2]).__contains__('县（市、区）')):
+            dept_name = items[5]
+        # 市单位的情况
+        else:
+            dept_name = items[3]
+        for del_keyword in del_keywords:
+            if(dept_name.startswith(del_keyword)):
+                # ret = dept_name.replace(del_keyword,'')
+                ret = str(dept_name)[del_keyword.__len__():dept_name.__len__()]
+                return ret
+        return  dept_name
+    except:
+        return '未知用户表部门'
+
+def initData():
+    file = file_path
+    # 打开文件
+    wb = load_workbook(file)
+    localTime = time.localtime(time.time())
+    currentTime = time.strftime("%Y-%m-%d %H:%M:%S", localTime)
+    print(currentTime + '\t开始处理数据：' + file)
+
+    sheet1 = wb['Sheet1']
+    sheet1_max_row = sheet1.max_row
+    # 遍历加载事项表，数据从第二行开始
+    for index in range(2, sheet1_max_row + 1):
+        # 记录序号
+        cell_value_xh = sheet1[sx_col_idx_xh + str(index)].value
+        ret_sx_xh.append(dataFormat(cell_value_xh))
+        # 记录权力基本码
+        cell_value_qljbm = sheet1[sx_col_idx_qljbm + str(index)].value
+        ret_sx_qljbm.append(dataFormat(cell_value_qljbm))
+        # 记录权力内部编码
+        cell_value_qlnbbm = sheet1[sx_col_idx_qlnbbm + str(index)].value
+        ret_sx_qlnbbm.append(dataFormat(cell_value_qlnbbm))
+        # 记录组织编码
+        cell_value_dept_no = sheet1[sx_col_idx_dept_no + str(index)].value
+        ret_sx_dept_nos.append(dataFormat(cell_value_dept_no))
+        # 记录部门名称
+        cell_value_dept_name = sheet1[sx_col_idx_dept_name + str(index)].value
+        ret_sx_dept_names.append(dataFormat(cell_value_dept_name))
+
+
+    sheet2 = wb['Sheet2']
+    sheet2_max_row = sheet2.max_row
+    # 遍历加载用户表，数据从第3行开始
+    for index in range(3, sheet2_max_row + 1):
+        # 记录地区、部门信息
+        cell_value_area_dept = sheet2[user_col_idx_dept_area + str(index)].value
+        ret_user_area_dept.append(dataFormat(cell_value_area_dept))
+        # 记录用户账号
+        cell_value_account = sheet2[user_col_idx_account + str(index)].value
+        ret_user_accounts.append(dataFormat(cell_value_account))
+        # 记录用户ID
+        cell_value_userid = sheet2[user_col_idx_userid + str(index)].value
+        ret_user_userids.append(dataFormat(cell_value_userid))
+        # 记录组织编码
+        cell_value_orgid = sheet2[user_col_idx_orgid + str(index)].value
+        ret_user_orgids.append(dataFormat(cell_value_orgid))
+
+        # 存储中间数据
+        ret_user_area.append(dataFormat(getUserArea(cell_value_area_dept)))
+        ret_user_dept.append(dataFormat(getUserDeptName(cell_value_area_dept)))
+
+    # wb.close()
+
+def dataFormat(data):
+    data = str(data).replace(' ', '').replace('\t', '').replace('\n', '').strip()
+    return data
+
+def processCore():
+    global suc_count
+    # 逐条处理事项表记录
+    for index in range(ret_sx_xh.__len__()):
+        flag = True
+        sx_dept_no = ret_sx_dept_nos[index]
+        # 事项表所属地区编码
+        sx_area = getSxArea(sx_dept_no)
+        sx_dept_name = ret_sx_dept_names[index]
+        # 事项表规范化的部门名称
+        sx_dept_name_fmt = getSxDeptName(sx_dept_name)
+
+        for index in range(ret_user_dept.__len__()):
+            if(not flag):
+                break
+            # 地区匹配
+            if(ret_user_area[index]==sx_area):
+                # 部门名称匹配
+                if(str(ret_user_dept[index]).__contains__(str(sx_dept_name_fmt)) or str(sx_dept_name_fmt).__contains__(str(ret_user_dept[index]))):
+                    ret_sx_user_accounts.append(ret_user_accounts[index])
+                    ret_sx_user_userids.append(ret_user_userids[index])
+                    ret_sx_user_orgids.append(ret_user_orgids[index])
+                    i = areas_no.index(sx_area)
+                    area_name = areas_name[i]
+                    ret_sx_user_area_names.append(area_name)
+                    flag = False
+                    break
+                else:
+                    tmp_user_dept_name = ''
+                    tmp_sx_dept_name = ''
+                    for key in dept_names_dict.keys():
+                        if(key.__contains__(str(ret_user_dept[index]))):
+                            tmp_user_dept_name = dept_names_dict[key]
+                            if(key.__contains__(str(sx_dept_name_fmt))):
+                                ret_sx_user_accounts.append(ret_user_accounts[index])
+                                ret_sx_user_userids.append(ret_user_userids[index])
+                                ret_sx_user_orgids.append(ret_user_orgids[index])
+                                i = areas_no.index(sx_area)
+                                area_name = areas_name[i]
+                                ret_sx_user_area_names.append(area_name)
+                                flag = False
+                                break
+        if(flag):
+            ret_sx_user_accounts.append('')
+            ret_sx_user_userids.append('')
+            ret_sx_user_area_names.append('')
+            ret_sx_user_orgids.append('')
+        else:
+            suc_count = suc_count + 1
+
+def dataOut():
+    # *****************输出到excel*****************
+    sheet_out_headers = ['序号', '权力基本码', '权力内部编码', '地区', '部门编码', '部门', '账号', '用户ID', '组织编码']
+    wb_out = Workbook()
+
+    # 设置汇总表
+    sheet_out = wb_out.active
+    sheet_out.title = '汇总表'
+    # 设置列名、列宽
+    for index in range(1, sheet_out_headers.__len__() + 1):
+        sheet_out.cell(row=1, column=index, value=sheet_out_headers[index - 1])
+
+    # 设置每列的值
+    for column_index in range(1, sheet_out_headers.__len__() + 1):
+        column_name = sheet_out_headers[column_index - 1]
+        dataList = getData(column_name)
+        for index1 in range(1, dataList.__len__() + 1):
+            sheet_out.cell(row=index1 + 1, column=column_index, value=dataList[index1 - 1])
+
+    # 设置样式：列宽
+    for index in range(1, sheet_out_headers.__len__() + 1):
+        column_letter = get_column_letter(index)
+        sheet_out.column_dimensions[column_letter].width = 12
+    sheet_out.column_dimensions['B'].width = 20
+    sheet_out.column_dimensions['C'].width = 35
+    sheet_out.column_dimensions['D'].width = 15
+    sheet_out.column_dimensions['E'].width = 15
+    sheet_out.column_dimensions['F'].width = 25
+    sheet_out.column_dimensions['G'].width = 15
+    sheet_out.column_dimensions['H'].width = 35
+
+    # 设置样式：对齐、字体等
+    header_12_font = Font(name='等线', size=12, italic=False, bold=True)
+    body_10_font = Font(name='等线', size=10, italic=False, bold=False)
+    for row in sheet_out.rows:
+        for index in range(len(row)):
+            coordinate = row[index].coordinate
+            sheet_out[coordinate].alignment = Alignment(horizontal='center', vertical='center')
+            if (row[index].row == 1):
+                sheet_out[coordinate].font = header_12_font
+            else:
+                sheet_out[coordinate].font = body_10_font
+
+    # 保存文件并输出
+    # wb_out.save('d:/data/out/' + currentTime + '.xlsx')
+    wb_out.save(file_out_path)
+
+def getData(column_name):
+    ret = []
+    if (str(column_name).__contains__('序号')):
+        ret = ret_sx_xh
+    elif (str(column_name).__contains__('权力基本码')):
+        ret = ret_sx_qljbm
+    elif (str(column_name).__contains__('权力内部编码')):
+        ret = ret_sx_qlnbbm
+    elif (str(column_name).__contains__('地区')):
+        ret = ret_sx_user_area_names
+    elif (str(column_name).__contains__('部门编码')):
+        ret = ret_sx_dept_nos
+    elif (str(column_name).__contains__('部门')):
+        ret = ret_sx_dept_names
+    elif (str(column_name).__contains__('账号')):
+        ret = ret_sx_user_accounts
+    elif (str(column_name).__contains__('用户ID')):
+        ret = ret_sx_user_userids
+    elif (str(column_name).__contains__('组织编码')):
+        ret = ret_sx_user_orgids
+    else:
+        raise Exception("Invalid column_name!", column_name)
+    return  ret
+
+if __name__ == '__main__':
+    initData()
+    processCore()
+    for index in range(ret_sx_xh.__len__()):
+        # print(ret_sx_xh[index] + " " + ret_sx_dept_names[index] + " " + ret_user_dept[index] + " " + ret_user_accounts[index] + " " + ret_user_userids[index])
+        print(ret_sx_xh[index] + " " + ret_sx_user_area_names[index] + " " + ret_sx_dept_names[index] + " " + ret_sx_user_accounts[index] + " " + ret_sx_user_userids[index])
+
+    # 写入到文件
+    dataOut()
+
+    print("================执行结果================")
+    print("结果已经输出到 " + file_out_path)
+    print("总条数：" + str(ret_sx_xh.__len__()))
+    print("成功匹配条数：" + str(suc_count))
+    print("end...")
